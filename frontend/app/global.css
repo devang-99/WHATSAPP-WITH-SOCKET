@@ -1,0 +1,11 @@
+body{
+    background-image: url("https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTWpMekGavcZsGEXrkwd2yaIepOa7Ev_KTF1g&s");
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+*{
+    margin: 0px;
+    padding: 0px;
+    box-sizing: border-box;
+}
