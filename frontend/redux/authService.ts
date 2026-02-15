@@ -80,3 +80,32 @@ export const toggleBanUser = async (userid: number) => {
 
   return response.json();
 };
+
+export const updateProfileApi = async (
+  userid: string,
+  formData: FormData
+) => {
+  const res = await fetch(
+    `http://localhost:3001/auth/profile/${userid}`,
+    {
+      method: "PATCH",
+      body: formData,
+      credentials: "include",
+    }
+  );
+
+  return res.json();
+};
+
+
+export const getCurrentUserApi = async (userid: string) => {
+  const res = await fetch(
+    `http://localhost:3001/auth/me/${userid}`
+  );
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch current user");
+  }
+
+  return res.json();
+};

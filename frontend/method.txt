@@ -1,0 +1,185 @@
+ 
+  // ❌ OLD APPROACH (direct socket mapping)
+  // private readonly connectedUsers = new Map<string, string>();
+ 
+ 
+// @WebSocketGateway({
+//   cors: { origin: 'http://localhost:3000' },
+// })
+// export class MessageGateway
+//   implements OnGatewayConnection, OnGatewayDisconnect
+// {
+//   constructor(
+//     @InjectRepository(User)
+//     private readonly userRepository: Repository<User>,
+
+//     @InjectRepository(Message)
+//     private readonly messageRepository: Repository<Message>,
+//   ) {}
+
+//   @WebSocketServer()
+//   server: Server;
+
+//   // userid -> socketId
+//   private readonly connectedUsers = new Map<string, string>();
+
+//   handleConnection(client: Socket) {
+//     console.log('Socket connected:', client.id);
+//   }
+
+//   async handleDisconnect(client: Socket) {
+//     const entry = [...this.connectedUsers.entries()].find(
+//       ([, socketId]) => socketId === client.id,
+//     );
+
+//     if (entry) {
+//       const [userid] = entry;
+
+//       await this.userRepository.update({ userid }, { isOnline: false });
+
+//       this.connectedUsers.delete(userid);
+
+//       this.server.emit('userOffline', { userid });
+//       console.log(`User offline: ${userid}`);
+//     }
+//   }
+
+//   /* ================= USER ONLINE ================= */
+
+//   @SubscribeMessage('onConnection')
+//   async onConnection(
+//     @MessageBody() userid: string,
+//     @ConnectedSocket() client: Socket,
+//   ) {
+//     if (!userid) return;
+
+//     await this.userRepository.update({ userid }, { isOnline: true });
+
+//     this.connectedUsers.set(userid, client.id);
+
+//     this.server.emit('userOnline', { userid });
+
+//     console.log('User online:', userid);
+//   }
+
+//   /* ================= USER OFFLINE ================= */
+
+//   @SubscribeMessage('onDisconnection')
+//   async onDisconnection(@MessageBody() userid: string) {
+//     if (!userid) return;
+
+//     await this.userRepository.update({ userid }, { isOnline: false });
+
+//     this.connectedUsers.delete(userid);
+//     this.server.emit('userOffline', { userid });
+//   }
+
+//   /* ================= TYPING ================= */
+
+//   @SubscribeMessage('typing')
+//   handleTyping(@MessageBody() data: any) {
+//     const receiverSocket = this.connectedUsers.get(data.receiverId);
+
+//     if (receiverSocket) {
+//       this.server.to(receiverSocket).emit('usertyping', {
+//         userid: data.userid,
+//       });
+//     }
+//   }
+
+//   /* ================= FETCH MESSAGES ================= */
+
+//   @SubscribeMessage('fetchMessages')
+//   async fetchMessages(
+//     @MessageBody() roomId: string,
+//     @ConnectedSocket() client: Socket,
+//   ) {
+//     const messages = await this.messageRepository.find({
+//       where: { roomId },
+//       order: { createdAt: 'ASC' },
+//     });
+
+//     client.emit('getMessages', messages);
+//   }
+
+//   /* ================= SEND MESSAGE ================= */
+
+//   @SubscribeMessage('sendMessage')
+//   async sendMessage(@MessageBody() data: any) {
+//     const { roomId, text, senderId, receiverId } = data;
+
+//     if (!roomId || !senderId || !receiverId) return;
+
+//     const message = await this.messageRepository.save({
+//       roomId,
+//       senderId,
+//       receiverId,
+//       message: text,
+//     });
+
+//     const receiverSocket = this.connectedUsers.get(receiverId);
+
+//     if (receiverSocket) {
+//       this.server.to(receiverSocket).emit('newMessage', message);
+//     }
+
+//     const senderSocket = this.connectedUsers.get(senderId);
+//     if (senderSocket) {
+//       this.server.to(senderSocket).emit('newMessage', message);
+//     }
+//   }
+// }
+
+  /* =========================================================
+     ROOM ID LOGIC
+     ========================================================= */
+
+  // ❌ OLD SIMPLE ROOM CREATION (deterministic id)
+  // const roomId =
+  //   me && targetUser ? [me, targetUser].sort().join("_") : null;
+
+  // ✅ used to join socket room
+// useEffect(() => {
+//   if (!roomId) return;
+
+//   const socket = getSocket();
+//   if (!socket) return;
+
+//   dispatch(clearMessages());
+//   socket.emit("fetchMessages", roomId);
+
+//   const onGetMessages = (msgs: any[]) => {
+//     const normalized: Message[] = msgs.map((m) => ({
+//       id: m.id,
+//       roomId,
+//       senderId: m.senderId,
+//       receiverId: m.receiverId,
+//       message: m.message,
+//       createdAt: m.createdAt,
+//     }));
+//     dispatch(setMessages(normalized));
+//   };
+
+//   const onNewMessage = (m: any) => {
+//     dispatch(
+//       addMessage({
+//         id: m.id,
+//         roomId,
+//         senderId: m.senderId,
+//         receiverId: m.receiverId,
+//         message: m.message,
+//         createdAt: m.createdAt,
+//       }),
+//     );
+//   };
+
+//   socket.on("getMessages", onGetMessages);
+//   socket.on("newMessage", onNewMessage);
+
+//   return () => {
+//     socket.off("getMessages", onGetMessages);
+//     socket.off("newMessage", onNewMessage);
+//   };
+// }, [roomId, dispatch]);
+
+/* ================= TYPING ================= */

@@ -3,9 +3,11 @@ import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import {
   createUser,
   findUser,
+  getCurrentUserApi,
   getUsers,
   SocialSignIn,
   toggleBanUser,
+  updateProfileApi,
 } from "./authService";
 
 export type User = {
@@ -16,6 +18,8 @@ export type User = {
   role?: string;
   photoURL?: string | null;
   isOnline?: boolean;
+  bio?: string;
+  profilePic?: string;
 };
 
 // interface User {
@@ -111,6 +115,31 @@ export const toggleUserBan = createAsyncThunk(
   },
 );
 
+export const updateProfile = createAsyncThunk(
+  "user/updateProfile",
+  async (
+    { userid, formData }: { userid: string; formData: FormData },
+    { rejectWithValue },
+  ) => {
+    try {
+      return await updateProfileApi(userid, formData);
+    } catch (err: any) {
+      return rejectWithValue(err.message);
+    }
+  },
+);
+
+export const fetchCurrentUser = createAsyncThunk(
+  "auth/fetchCurrentUser",
+  async (userid: string, { rejectWithValue }) => {
+    try {
+      return await getCurrentUserApi(userid);
+    } catch (err: any) {
+      return rejectWithValue(err.message);
+    }
+  },
+);
+
 const authenticateSlice = createSlice({
   name: "authenticate",
   initialState,
@@ -201,6 +230,12 @@ const authenticateSlice = createSlice({
         if (index !== -1) {
           state.users[index].isBanned = updatedUser.isBanned;
         }
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.currentUser = action.payload;
+      })
+      .addCase(fetchCurrentUser.fulfilled, (state, action) => {
+        state.currentUser = action.payload;
       });
   },
 });

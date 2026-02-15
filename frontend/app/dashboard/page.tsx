@@ -16,34 +16,53 @@ import {
   Menu,
   MenuItem,
 } from "@mui/material";
-import AccountCircle from "@mui/icons-material/AccountCircle";
 
 import { useRouter } from "next/navigation";
 import { getSocket } from "../lib/socket";
 
 import { useAppDispatch, useAppSelector } from "../utils/hooks";
-import { logout, fetchUsers } from "@/redux/authSlice";
-import {
-  clearMessages,
-  setMessages,
-  addMessage,
-} from "@/redux/messageSlice";
-import type { Message } from "@/redux/messageSlice";
+import { logout, fetchUsers, fetchCurrentUser } from "@/redux/authSlice";
+import { clearMessages, setMessages, addMessage } from "@/redux/messageSlice";
+
+/* =========================================================
+   TYPES
+========================================================= */
 
 type User = {
   id: string;
   username: string;
-  email: string;
+  profilePic?: string | null;
   isOnline?: boolean;
 };
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+const getAvatarUrl = (file?: string | null) =>
+  file ? `http://localhost:3001/uploads/${file}` : undefined;
+
+/* Optional nice colored avatars when no image */
+const stringToColor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return `hsl(${hash % 360}, 60%, 50%)`;
+};
+
+/* =========================================================
+   COMPONENT
+========================================================= */
 
 export default function Main() {
   const dispatch = useAppDispatch();
   const router = useRouter();
 
   const currentUser = useAppSelector(
-    (state) => state.authenticator.currentUser,
+    (state) => state.authenticator.currentUser
   );
+
   const messages = useAppSelector((state) => state.messenger.messages);
 
   const [users, setUsers] = useState<User[]>([]);
@@ -59,12 +78,12 @@ export default function Main() {
 
   const me = currentUser?.userid;
   const targetUser = selectedUser?.id;
-  const roomId =
-    me && targetUser ? [me, targetUser].sort().join("_") : null;
-
+  const roomId = me && targetUser ? [me, targetUser].sort().join("_") : null;
   const menuOpen = Boolean(anchorEl);
 
-  /* ================= FETCH USERS ================= */
+  /* =========================================================
+     FETCH USERS
+  ========================================================= */
 
   useEffect(() => {
     if (!currentUser) return;
@@ -78,14 +97,24 @@ export default function Main() {
             .map((u: any) => ({
               id: u.userid,
               username: u.username,
-              email: u.email,
               isOnline: u.isOnline,
-            })),
+              profilePic: u.profilePic,
+            }))
         );
       });
   }, [currentUser, dispatch]);
 
-  /* ================= SOCKET CONNECT ================= */
+useEffect(() => {
+  if (currentUser?.userid) {
+    dispatch(fetchCurrentUser(currentUser.userid));
+  }
+}, [currentUser?.userid, dispatch]);
+
+
+
+  /* =========================================================
+     SOCKET CONNECT
+  ========================================================= */
 
   useEffect(() => {
     if (!me) return;
@@ -97,12 +126,13 @@ export default function Main() {
     socket.emit("onConnection", me);
 
     return () => {
-      socket.emit("onDisconnection", me);
       socket.disconnect();
     };
   }, [me]);
 
-  /* ================= ONLINE / OFFLINE ================= */
+  /* =========================================================
+     ONLINE STATUS
+  ========================================================= */
 
   useEffect(() => {
     const socket = getSocket();
@@ -110,17 +140,13 @@ export default function Main() {
 
     const online = ({ userid }: any) => {
       setUsers((prev) =>
-        prev.map((u) =>
-          u.id === userid ? { ...u, isOnline: true } : u,
-        ),
+        prev.map((u) => (u.id === userid ? { ...u, isOnline: true } : u))
       );
     };
 
     const offline = ({ userid }: any) => {
       setUsers((prev) =>
-        prev.map((u) =>
-          u.id === userid ? { ...u, isOnline: false } : u,
-        ),
+        prev.map((u) => (u.id === userid ? { ...u, isOnline: false } : u))
       );
     };
 
@@ -133,7 +159,9 @@ export default function Main() {
     };
   }, []);
 
-  /* ================= FETCH / RECEIVE MESSAGES ================= */
+  /* =========================================================
+     FETCH MESSAGES
+  ========================================================= */
 
   useEffect(() => {
     if (!roomId) return;
@@ -142,43 +170,22 @@ export default function Main() {
     if (!socket) return;
 
     dispatch(clearMessages());
+    socket.emit("joinRoom", roomId);
     socket.emit("fetchMessages", roomId);
 
-    const onGetMessages = (msgs: any[]) => {
-      const normalized: Message[] = msgs.map((m) => ({
-        id: m.id,
-        roomId,
-        senderId: m.senderId,
-        receiverId: m.receiverId,
-        message: m.message,
-        createdAt: m.createdAt,
-      }));
-      dispatch(setMessages(normalized));
-    };
-
-    const onNewMessage = (m: any) => {
-      dispatch(
-        addMessage({
-          id: m.id,
-          roomId,
-          senderId: m.senderId,
-          receiverId: m.receiverId,
-          message: m.message,
-          createdAt: m.createdAt,
-        }),
-      );
-    };
-
-    socket.on("getMessages", onGetMessages);
-    socket.on("newMessage", onNewMessage);
+    socket.on("getMessages", (msgs: any[]) => dispatch(setMessages(msgs)));
+    socket.on("newMessage", (msg: any) => dispatch(addMessage(msg)));
 
     return () => {
-      socket.off("getMessages", onGetMessages);
-      socket.off("newMessage", onNewMessage);
+      socket.emit("leaveRoom", roomId);
+      socket.off("getMessages");
+      socket.off("newMessage");
     };
   }, [roomId, dispatch]);
 
-  /* ================= TYPING ================= */
+  /* =========================================================
+     TYPING
+  ========================================================= */
 
   useEffect(() => {
     const socket = getSocket();
@@ -187,29 +194,29 @@ export default function Main() {
     const onTyping = () => {
       setOtherUserTyping(true);
       if (typingTimeout.current) clearTimeout(typingTimeout.current);
-      typingTimeout.current = setTimeout(
-        () => setOtherUserTyping(false),
-        2000,
-      );
+      typingTimeout.current = setTimeout(() => setOtherUserTyping(false), 2000);
     };
 
     socket.on("usertyping", onTyping);
     return () => {socket.off("usertyping", onTyping);}
   }, []);
 
-  /* ================= SCROLL ================= */
+  /* =========================================================
+     AUTO SCROLL
+  ========================================================= */
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  /* ================= SEND MESSAGE ================= */
+  /* =========================================================
+     SEND MESSAGE
+  ========================================================= */
 
   const handleSendMessage = () => {
     if (!messageText.trim() || !roomId) return;
 
-    const socket = getSocket();
-    socket?.emit("sendMessage", {
+    getSocket()?.emit("sendMessage", {
       roomId,
       text: messageText,
       senderId: me,
@@ -219,26 +226,30 @@ export default function Main() {
     setMessageText("");
   };
 
-  /* ================= LOGOUT ================= */
+  /* =========================================================
+     LOGOUT
+  ========================================================= */
 
   const handleLogout = () => {
-    const socket = getSocket();
-    socket?.emit("onDisconnection", me);
-    socket?.disconnect();
-
+    getSocket()?.disconnect();
     dispatch(logout());
     router.push("/login");
   };
 
-  /* ================= UI ================= */
+  /* =========================================================
+     UI
+  ========================================================= */
 
   return (
     <div className="whatsapp-app">
+
+      {/* ================= SIDEBAR ================= */}
+
       <div className="sidebar">
         <div className="sidebar-header">Users</div>
 
         <input
-          placeholder="🔍 Search users"
+          placeholder="Search users"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -246,7 +257,7 @@ export default function Main() {
         <div className="user-list">
           {users
             .filter((u) =>
-              u.email.toLowerCase().includes(search.toLowerCase()),
+              u.username.toLowerCase().includes(search.toLowerCase())
             )
             .map((user) => (
               <div
@@ -256,36 +267,57 @@ export default function Main() {
                 }`}
                 onClick={() => setSelectedUser(user)}
               >
-                <Avatar sx={{ bgcolor: "#15e461" }}>
-                  {user.username?.[0]?.toUpperCase()}
-                </Avatar>
+                <div className="user-avatar">
+                  <Avatar
+                    src={getAvatarUrl(user.profilePic)}
+                    sx={{
+                      bgcolor: user.profilePic
+                        ? undefined
+                        : stringToColor(user.username),
+                    }}
+                  >
+                    {!user.profilePic && user.username[0].toUpperCase()}
+                  </Avatar>
 
-                <div>
-                  <strong>{user.username}</strong>
-                  <br />
-                  <small>{user.email}</small>
+                  {user.isOnline && <span className="online-dot" />}
                 </div>
 
-                <span
-                  className={`status-dot ${
-                    user.isOnline ? "online" : "offline"
-                  }`}
-                />
+                <strong>{user.username}</strong>
               </div>
             ))}
         </div>
       </div>
 
-      <div className="chat-window">
-        <AppBar position="static" sx={{ backgroundColor: "#178f6b" }}>
-          <Toolbar sx={{ justifyContent: "space-between" }}>
-            <Typography variant="h6">
-              {selectedUser?.username || "WhatsApp"}
-            </Typography>
+      {/* ================= CHAT ================= */}
 
-            <IconButton onClick={(e) => setAnchorEl(e.currentTarget)}>
-              <AccountCircle />
-            </IconButton>
+      <div className="chat-window">
+
+        {/* HEADER */}
+        <AppBar position="static">
+          <Toolbar sx={{ justifyContent: "space-between" }}>
+
+            {/* LEFT — selected user */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {selectedUser && (
+                <Avatar src={getAvatarUrl(selectedUser.profilePic)}>
+                  {!selectedUser.profilePic &&
+                    selectedUser.username[0].toUpperCase()}
+                </Avatar>
+              )}
+              <Typography variant="h6">
+                {selectedUser?.username || "WhatsApp"}
+              </Typography>
+            </div>
+
+            {/* RIGHT — logged in user */}
+            {currentUser && (
+              <IconButton onClick={(e) => setAnchorEl(e.currentTarget)}>
+                <Avatar src={getAvatarUrl(currentUser.profilePic)}>
+                  {!currentUser.profilePic &&
+                    currentUser.username?.[0]?.toUpperCase()}
+                </Avatar>
+              </IconButton>
+            )}
 
             <Menu
               anchorEl={anchorEl}
@@ -295,25 +327,49 @@ export default function Main() {
               <MenuItem onClick={handleLogout} sx={{ color: "red" }}>
                 Logout
               </MenuItem>
+              <MenuItem onClick={() => router.push("/profile")}>
+                Profile
+              </MenuItem>
             </Menu>
           </Toolbar>
         </AppBar>
 
-        <div className="chat-messages">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`message-bubble ${
-                msg.senderId === me ? "sent" : "received"
-              }`}
-            >
-              {msg.message}
-            </div>
-          ))}
+        {/* ================= MESSAGES ================= */}
 
-          {otherUserTyping && <em>Typing...</em>}
+        <div className="chat-messages">
+          {messages.map((msg: any) => {
+            const isMe = msg.senderId === me;
+
+            return (
+              <div
+                key={msg.id}
+                className={`message-row ${isMe ? "me" : "other"}`}
+              >
+                <div className={`message-bubble ${isMe ? "sent" : "received"}`}>
+                  {msg.message}
+                  <div className="msg-time">
+                    {new Date(msg.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {otherUserTyping && (
+            <div className="message-row other">
+              <div className="typing-bubble">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
+
+        {/* ================= INPUT ================= */}
 
         {selectedUser && (
           <div className="chat-input">
@@ -326,15 +382,9 @@ export default function Main() {
               placeholder="Type a message"
               onChange={(e) => {
                 setMessageText(e.target.value);
-                const socket = getSocket();
-                socket?.emit("typing", {
-                  userid: me,
-                  receiverId: targetUser,
-                });
+                getSocket()?.emit("typing", { roomId, userid: me });
               }}
-              onKeyDown={(e) =>
-                e.key === "Enter" && handleSendMessage()
-              }
+              onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
             />
 
             <IconButton onClick={handleSendMessage}>
@@ -346,9 +396,7 @@ export default function Main() {
         {showEmojiPicker && (
           <div className="emoji-picker">
             <EmojiPicker
-              onEmojiClick={(e) =>
-                setMessageText((p) => p + e.emoji)
-              }
+              onEmojiClick={(e) => setMessageText((p) => p + e.emoji)}
             />
           </div>
         )}

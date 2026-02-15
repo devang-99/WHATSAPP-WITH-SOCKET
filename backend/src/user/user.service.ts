@@ -87,6 +87,29 @@ export class UserService {
     }
     return user;
   }
+  async updateProfile(
+    userid: string,
+    bio?: string,
+    file?: Express.Multer.File,
+  ) {
+    const user = await this.userRepository.findOne({
+      where: { userid },
+    });
+
+    if (!user) throw new HttpException('User not found', 404);
+
+    if (bio !== undefined) {
+      user.bio = bio;
+    }
+
+    if (file) {
+      user.profilePic = file.filename;
+    }
+
+    await this.userRepository.save(user);
+
+    return user;
+  }
 
   async getAllNonAdminUsers(page: number, limit: number) {
     const skip = (page - 1) * limit;
@@ -108,26 +131,7 @@ export class UserService {
     };
   }
 
-  // async toggleBanUser(userId: string) {
-  //   console.log('hitted service', userId);
-  //   const user = await this.userRepository.findOne({
-  //     where: { userid: userId },
-  //   });
-
-  //   if (!user) {
-  //     throw new HttpException({ message: 'User not found' }, 404);
-  //   }
-
-  //   if (user.role === 'admin') {
-  //     throw new HttpException(
-  //       { message: 'Admin users cannot be banned or unbanned' },
-  //       403,
-  //     );
-  //   }
-
-  //   user.isBanned = !user.isBanned;
-  //   // await this.userRepository.save(user);
-
-  //   return await this.userRepository.save(user);
-  // }
+  async findByUserId(userid: string) {
+    return this.userRepository.findOne({ where: { userid } });
+  }
 }

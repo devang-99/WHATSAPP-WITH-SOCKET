@@ -174,7 +174,7 @@ export default function Login() {
           </Button>
 
           <Typography align="center" sx={{ mt: 2 }}>
-            Don’t have an account? <Link href="/register">Sign up</Link>
+            Don’t have an account? <Link href="/authentication/signup">Sign up</Link>
           </Typography>
         </form>
       </div>

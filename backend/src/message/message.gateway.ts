@@ -1,6 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
 import {
   ConnectedSocket,
@@ -18,8 +19,7 @@ import { User } from 'src/user/entities/user.entity';
 import { Message } from './entities/message.entity';
 
 @WebSocketGateway({
-  cors: { origin: '*' },
-  transports: ['websocket'],
+  cors: { origin: 'http://localhost:3000' },
 })
 export class MessageGateway
   implements OnGatewayConnection, OnGatewayDisconnect
@@ -35,27 +35,27 @@ export class MessageGateway
   @WebSocketServer()
   server: Server;
 
-  // userid -> socketId
-  private readonly connectedUsers = new Map<string, string>();
+  /* ================= SOCKET CONNECT ================= */
 
   handleConnection(client: Socket) {
     console.log('Socket connected:', client.id);
   }
 
   async handleDisconnect(client: Socket) {
-    const entry = [...this.connectedUsers.entries()].find(
-      ([, socketId]) => socketId === client.id,
-    );
+    console.log('Socket disconnected:', client.id);
 
-    if (entry) {
-      const [userid] = entry;
+    const userid = client.data.userid;
+    if (!userid) return;
 
+    // check if any sockets of this user still exist
+    const sockets = await this.server.in(userid).fetchSockets();
+
+    if (sockets.length === 0) {
       await this.userRepository.update({ userid }, { isOnline: false });
 
-      this.connectedUsers.delete(userid);
-
       this.server.emit('userOffline', { userid });
-      console.log(`User offline: ${userid}`);
+
+      console.log(`User ${userid} offline`);
     }
   }
 
@@ -67,39 +67,49 @@ export class MessageGateway
     @ConnectedSocket() client: Socket,
   ) {
     if (!userid) return;
+    // store userid on socket
+    client.data.userid = userid;
+
+    // join personal room
+    await client.join(userid);
 
     await this.userRepository.update({ userid }, { isOnline: true });
 
-    this.connectedUsers.set(userid, client.id);
-
     this.server.emit('userOnline', { userid });
 
-    console.log('User online:', userid);
+    console.log(`User ${userid} joined personal room`);
   }
 
-  /* ================= USER OFFLINE ================= */
+  /* =========================================================
+        ⭐ JOIN ROOM (REAL SOCKET.IO ROOM)
+     ========================================================= */
 
-  @SubscribeMessage('onDisconnection')
-  async onDisconnection(@MessageBody() userid: string) {
-    if (!userid) return;
+  @SubscribeMessage('joinRoom')
+  async joinRoom(
+    @MessageBody() roomId: string,
+    @ConnectedSocket() client: Socket,
+  ) {
+    await client.join(roomId);
+    console.log(`Socket ${client.id} joined room ${roomId}`);
+  }
 
-    await this.userRepository.update({ userid }, { isOnline: false });
-
-    this.connectedUsers.delete(userid);
-    this.server.emit('userOffline', { userid });
+  @SubscribeMessage('leaveRoom')
+  async leaveRoom(
+    @MessageBody() roomId: string,
+    @ConnectedSocket() client: Socket,
+  ) {
+    await client.leave(roomId);
+    console.log(`Socket ${client.id} left room ${roomId}`);
   }
 
   /* ================= TYPING ================= */
 
   @SubscribeMessage('typing')
-  handleTyping(@MessageBody() data: any) {
-    const receiverSocket = this.connectedUsers.get(data.receiverId);
+  handleTyping(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+    const { roomId, userid } = data;
 
-    if (receiverSocket) {
-      this.server.to(receiverSocket).emit('usertyping', {
-        userid: data.userid,
-      });
-    }
+    // send to everyone EXCEPT sender
+    client.to(roomId).emit('usertyping', { userid });
   }
 
   /* ================= FETCH MESSAGES ================= */
@@ -132,15 +142,7 @@ export class MessageGateway
       message: text,
     });
 
-    const receiverSocket = this.connectedUsers.get(receiverId);
-
-    if (receiverSocket) {
-      this.server.to(receiverSocket).emit('newMessage', message);
-    }
-
-    const senderSocket = this.connectedUsers.get(senderId);
-    if (senderSocket) {
-      this.server.to(senderSocket).emit('newMessage', message);
-    }
+    // ✅ broadcast message to everyone in room
+    this.server.to(roomId).emit('newMessage', message);
   }
 }

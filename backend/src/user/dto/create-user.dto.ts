@@ -29,4 +29,12 @@ export class CreateUserDto {
   @IsString({ message: 'role must be a string' })
   @IsOptional()
   role: string;
+
+  @IsOptional()
+  @IsString()
+  bio: string;
+
+  @IsOptional()
+  @IsString()
+  profilePic: string;
 }

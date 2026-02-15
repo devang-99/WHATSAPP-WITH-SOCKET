@@ -10,6 +10,12 @@ import {
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UseInterceptors, UploadedFile } from '@nestjs/common';
+
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { multerConfig } from 'src/database/multerConfiguration/multerConfig';
 
 @Controller('auth')
 export class UserController {
@@ -33,5 +39,22 @@ export class UserController {
   loginUser(@Body() createUserDto: CreateUserDto) {
     return this.userService.loginUser(createUserDto);
   }
+
+@Patch('profile/:userid')
+@UseInterceptors(FileInterceptor('profilePic', multerConfig))
+updateProfile(
+  @Param('userid') userid: string,
+  @UploadedFile() file: Express.Multer.File,
+  @Body() body: UpdateUserDto,
+) {
+   console.log("ROUTE HIT");
+  console.log("FILE:", file);
+  console.log("BODY:", body);
+  return this.userService.updateProfile(userid, body.bio, file);
+}
+@Get('me/:userid')
+getMe(@Param('userid') userid: string) {
+  return this.userService.findByUserId(userid);
+}
 
 }

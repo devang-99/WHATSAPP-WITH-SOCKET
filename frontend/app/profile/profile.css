@@ -1,0 +1,50 @@
+.profile-page {
+  max-width: 500px;
+  margin: auto;
+  padding: 30px 20px;
+  font-family: "Segoe UI", sans-serif;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+
+.profile-avatar-wrapper {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 30px;
+}
+
+.edit-avatar-btn {
+  position: absolute !important;
+  bottom: 0;
+  right: 35%;
+  background: white !important;
+}
+
+.profile-field {
+  margin-bottom: 20px;
+}
+
+.profile-field label {
+  display: block;
+  font-size: 13px;
+  color: #667781;
+  margin-bottom: 5px;
+}
+
+.profile-value {
+  padding: 12px;
+  background: #f0f2f5;
+  border-radius: 8px;
+}
+
+.profile-actions {
+  margin-top: 30px;
+  display: flex;
+  justify-content: center;
+}
